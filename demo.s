@@ -16,6 +16,9 @@
 ; "nes" linker config requires a STARTUP section, even if it's empty
 .segment "STARTUP"
 
+.segment "ZEROPAGE"
+player_x: .res 1
+
 ; Main code segment for the program
 .segment "CODE"
 
@@ -69,11 +72,22 @@ load_palettes:
   cpx #$20
   bne @loop
 
+  ldx #$00
+load_sprites:
+  lda sprites, x
+  sta $0200, x
+  inx
+  cpx #$18
+  bne load_sprites
+
 enable_rendering:
   lda #%10000000	; Enable NMI
   sta $2000
   lda #%00010000	; Enable Sprites
   sta $2001
+
+  lda #0203  ; load x position of player
+  sta player_x
 
 forever:
   jmp forever
@@ -84,12 +98,22 @@ nmi:  ; Non Maskable Interrupt
   sta $2003  ;  OAM low byte (00)
   lda #$02
   sta $4014 ; OAM high byte (02) / transfer OAM DMA (direct memory access)
-;@loop:  lda hello, x
-;  sta $2004
-;  inx
-;  cpx #$1c
-;  bne @loop;
 
+  ; store left sprite x values.
+  ; copy to x register, clear carry, add 8, store right sprites
+  ; increment x register to move character right 1px
+  lda player_x
+  sta $0203
+  sta $020b
+  sta $0213
+  tax
+  clc
+  adc #$08
+  sta $0207
+  sta $020f
+  sta $0217
+  inx
+  stx player_x
 
   ; lda #$3f  ; high byte? address 3f00 prevents palette corruption on NTSC ppu
   ; sta $2006  ; PPUADDR (write twice)
@@ -101,71 +125,17 @@ nmi:  ; Non Maskable Interrupt
   ;  $0201 - tile index of sprite from pattern table
   ;  $0202 - attribute table (look up binary values for vflip, palette, etc)
   ;  $0203 - x coord
-DrawSprite:
-  lda #$10
-  sta $0200 ; y
-  lda #$00
-  sta $0201 ; index
-  lda #$00
-  sta $0202 ; attributes
-  lda #$08
-  sta $0203 ; x
-  ;sprite2
-  lda #$10
-  sta $0204
-  lda #$01
-  sta $0205 ; index
-  lda #$00
-  sta $0206
-  lda #$10
-  sta $0207
-  ;sprite3
-  lda #$18
-  sta $0208
-  lda #$02
-  sta $0209 ; index
-  lda #$00
-  sta $020a
-  lda #$08
-  sta $020b
-  ;sprite4
-  lda #$18
-  sta $020c
-  lda #$03
-  sta $020d ; index
-  lda #$00
-  sta $020e
-  lda #$10
-  sta $020f
-  ;sprite5
-  lda #$20
-  sta $0210
-  lda #$04
-  sta $0211 ; index
-  lda #$01
-  sta $0212
-  lda #$08
-  sta $0213
-  ;sprite6
-  lda #$20
-  sta $0214
-  lda #$05
-  sta $0215
-  lda #$01
-  sta $0216
-  lda #$10
-  sta $0217
 
   rti
 
-hello:
-  .byte $00, $00, $00, $00 	; Why do I need these here?
-  .byte $00, $00, $00, $00
-  .byte $6c, $00, $00, $6c
-  .byte $6c, $01, $00, $76
-  .byte $6c, $02, $00, $80
-  .byte $6c, $02, $00, $8A
-  .byte $6c, $03, $00, $94
+sprites:
+        ;y   tile attr x
+  .byte $10, $00, $00, $08
+  .byte $10, $01, $00, $10
+  .byte $18, $02, $00, $08
+  .byte $18, $03, $00, $10
+  .byte $20, $04, $00, $08
+  .byte $20, $05, $00, $10
 
 palettes:
   ; Background Palette
@@ -175,51 +145,12 @@ palettes:
   .byte $0f, $16, $36, $0c
 
   ; Sprite Palette
-  .byte $00, $0f, $1a, $36
-  .byte $00, $1a, $0f, $11
+  .byte $0f, $0f, $1a, $27
+  .byte $0f, $1a, $0f, $11
   .byte $0f, $15, $26, $20
   .byte $0f, $15, $26, $20
 
 ; Character memory
 .segment "CHARS"
-  ; .byte %11000011	; H (00)
-  ; .byte %11000011
-  ; .byte %11000011
-  ; .byte %11111111
-  ; .byte %11111111
-  ; .byte %11000011
-  ; .byte %11000011
-  ; .byte %11000011
-  ; .byte $00, $00, $00, $00, $00, $00, $00, $00
-
-  ; .byte %11111111	; E (01)
-  ; .byte %11111111
-  ; .byte %11000000
-  ; .byte %11111100
-  ; .byte %11111100
-  ; .byte %11000000
-  ; .byte %11111111
-  ; .byte %11111111
-  ; .byte $00, $00, $00, $00, $00, $00, $00, $00
-
-  ; .byte %11000000	; L (02)
-  ; .byte %11000000
-  ; .byte %11000000
-  ; .byte %11000000
-  ; .byte %11000000
-  ; .byte %11000000
-  ; .byte %11111111
-  ; .byte %11111111
-  ; .byte $00, $00, $00, $00, $00, $00, $00, $00
-
-  ; .byte %01111110	; O (03)
-  ; .byte %11100111
-  ; .byte %11000011
-  ; .byte %11000011
-  ; .byte %11000011
-  ; .byte %11000011
-  ; .byte %11100111
-  ; .byte %01111110
-  ; .byte $00, $00, $00, $00, $00, $00, $00, $00
 
   .incbin "survival.chr"
